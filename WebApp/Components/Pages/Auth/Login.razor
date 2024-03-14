@@ -1,0 +1,58 @@
+﻿@page "/auth/login"
+
+@inject IUserService userService
+@inject IdentityRedirectManager RedirectManager
+
+<EditForm Model="UserForLogin" method="post" OnValidSubmit="OnValidSubmit" FormName="loginForm">
+    <DataAnnotationsValidator />
+    <InputText @bind-Value="UserForLogin.Email" />
+    <ValidationMessage For="()=>UserForLogin.Email" class="text-danger" />
+    <InputText @bind-Value="UserForLogin.Password" />
+    <ValidationMessage  For="()=>UserForLogin.Password" class="text-danger" />
+        @if (string.IsNullOrEmpty(errorMessage) == false)
+    {
+        <div style="color:red">
+            @errorMessage
+        </div>
+    }
+
+    <button >Login</button>
+</EditForm>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+
+    [SupplyParameterFromForm(FormName = "loginForm")]
+    private UserForLoginDto UserForLogin { get; set; } = new();
+
+    [SupplyParameterFromQuery]
+    private string ReturnUrl { get; set; } = "/";
+
+    private string errorMessage = string.Empty;
+
+    private async Task OnValidSubmit()
+    {
+        var loginResult = userService.GetUserByEmail(UserForLogin.Email);
+        if (loginResult.Success == false)
+        {
+            errorMessage = loginResult.Message;
+            return;
+        }
+
+        List<Claim> claims =
+        [
+            new Claim(ClaimTypes.NameIdentifier, loginResult?.Data.UserId.ToString()),
+            new Claim(ClaimTypes.Email, loginResult.Data.Email),
+            new Claim(ClaimTypes.Name, loginResult.Data.FirstName),
+            new Claim(ClaimTypes.GivenName, loginResult.Data.LastName)
+        ];
+
+        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+
+        //Kullanıcı sisteme giriş yaptığında cookie oluşturulur ve kullanıcıya verilir.
+        await HttpContext.SignInAsync(new ClaimsPrincipal(identity));
+        RedirectManager.RedirectTo(ReturnUrl);
+    }
+}
